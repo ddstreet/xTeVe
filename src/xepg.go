@@ -219,9 +219,9 @@ func createXEPGMapping() {
 
 	// Create selection for the Dummy
 	var dummy = make(map[string]interface{})
-	var times = []string{"30", "60", "90", "120", "180", "240", "360"}
+	var dummyTimes = []string{"30", "60", "90", "120", "180", "240", "360"}
 
-	for _, i := range times {
+	for _, i := range dummyTimes {
 
 		var dummyChannel = make(map[string]interface{})
 		dummyChannel["display-names"] = []DisplayName{{Value: i + " Minutes"}}
@@ -233,6 +233,23 @@ func createXEPGMapping() {
 	}
 
 	Data.XMLTV.Mapping["xTeVe Dummy"] = dummy
+
+	// Create selection for the NVR
+	var nvr = make(map[string]interface{})
+	var nvrTimes = []string{"60", "120", "180", "240", "360", "720", "1440"}
+
+	for _, i := range nvrTimes {
+
+		var nvrChannel = make(map[string]interface{})
+		nvrChannel["display-names"] = []DisplayName{{Value: i + " Minutes"}}
+		nvrChannel["id"] = i + "_Minutes"
+		nvrChannel["icon"] = ""
+
+		nvr[nvrChannel["id"].(string)] = nvrChannel
+
+	}
+
+	Data.XMLTV.Mapping["xTeVe NVR"] = nvr
 
 }
 
@@ -632,7 +649,7 @@ func mapping() (err error) {
 			var mapping = xepgChannel.XMapping
 			var file = xepgChannel.XmltvFile
 
-			if file != "xTeVe Dummy" {
+			if file != "xTeVe Dummy" && file != "xTeVe NVR" {
 
 				if value, ok := Data.XMLTV.Mapping[file].(map[string]interface{}); ok {
 
@@ -789,6 +806,8 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 
 	if xmltvFile == System.Folder.Data+"xTeVe Dummy" {
 		xmltv = createDummyProgram(xepgChannel)
+	} else if xmltvFile == System.Folder.Data+"xTeVe NVR" {
+		xmltv = createNVRProgram(xepgChannel)
 	} else {
 
 		err = getLocalXMLTV(xmltvFile, &xmltv)
@@ -928,6 +947,73 @@ func createDummyProgram(xepgChannel XEPGChannelStruct) (dummyXMLTV XMLTV) {
 			epg.New = &New{Value: ""}
 
 			dummyXMLTV.Program = append(dummyXMLTV.Program, &epg)
+			epgStartTime = epgStopTime
+
+		}
+
+	}
+
+	return
+}
+
+// Create NVR Data (createXMLTVFile)
+func createNVRProgram(xepgChannel XEPGChannelStruct) (nvrXMLTV XMLTV) {
+
+	var imgc = Data.Cache.Images
+	var currentTime = time.Now()
+	var dateArray = strings.Fields(currentTime.String())
+	var offset = " " + dateArray[2]
+	var currentDay = currentTime.Format("20060102")
+	var startTime, _ = time.Parse("20060102150405", currentDay+"000000")
+
+	showInfo("Create NVR Guide:" + "Time offset" + offset + " - " + xepgChannel.XName)
+
+	var dl = strings.Split(xepgChannel.XMapping, "_")
+	nvrLength, err := strconv.Atoi(dl[0])
+	if err != nil {
+		ShowError(err, 000)
+		return
+	}
+
+	for d := 0; d < 4; d++ {
+
+		var epgStartTime = startTime.Add(time.Hour * time.Duration(d*24))
+
+		for t,e := nvrLength,1; t <= 1440; t,e = t + nvrLength,e + 1 {
+
+			var s, _ = strconv.Atoi(epgStartTime.Format("20060102"))
+
+			var epgStopTime = epgStartTime.Add(time.Minute * time.Duration(nvrLength))
+
+			var epg Program
+			poster := Poster{}
+
+			epg.Channel = xepgChannel.XMapping
+			epg.Start = epgStartTime.Format("20060102150405") + offset
+			epg.Stop = epgStopTime.Format("20060102150405") + offset
+			epg.Title = append(epg.Title, &Title{Value: xepgChannel.XName, Lang: "en"})
+
+			if nvrLength == 1440 {
+				epg.SubTitle = append(epg.SubTitle, &SubTitle{Value: "24h", Lang: "en"})
+				epg.Desc = append(epg.Desc, &Desc{Value: epgStartTime.Format("2006-01-02"), Lang: "en"})
+			} else {
+				epg.SubTitle = append(epg.SubTitle, &SubTitle{Value: epgStartTime.Format("15:04") + " - " + epgStopTime.Format("15:04"), Lang: "en"})
+				epg.Desc = append(epg.Desc, &Desc{Value: epgStartTime.Format("2006-01-02 15:04") + " - " + epgStopTime.Format("15:04"), Lang: "en"})
+			}
+
+			if Settings.XepgReplaceMissingImages {
+				poster.Src = imgc.Image.GetURL(xepgChannel.TvgLogo)
+				epg.Poster = append(epg.Poster, poster)
+			}
+
+			epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: fmt.Sprintf("S%dE%d", s, e), System: "SxxExx"})
+			epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: fmt.Sprintf("%d.%d.", s - 1, e - 1), System: "xmltv_ns"})
+			epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: epgStartTime.Format("2006-01-02 15:04"), System: "onscreen"})
+			epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: epgStartTime.Format("2006-01-02 15:04:05"), System: "original-air-date"})
+
+			epg.New = &New{Value: ""}
+
+			nvrXMLTV.Program = append(nvrXMLTV.Program, &epg)
 			epgStartTime = epgStopTime
 
 		}

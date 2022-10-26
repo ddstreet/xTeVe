@@ -1848,12 +1848,12 @@ class XMLTVFile {
     let text = new Array("-");
 
     for (let i = 0; i < fileIDs.length; i++) {
-      if (fileIDs[i] != "xTeVe Dummy") {
-        values.push(getValueFromProviderFile(fileIDs[i], "xmltv", "file.xteve"))
-        text.push(getValueFromProviderFile(fileIDs[i], "xmltv", "name"))
-      } else {
+      if (fileIDs[i] == "xTeVe Dummy" || fileIDs[i] == "xTeVe NVR") {
         values.push(fileIDs[i])
         text.push(fileIDs[i])
+      } else {
+        values.push(getValueFromProviderFile(fileIDs[i], "xmltv", "file.xteve"))
+        text.push(getValueFromProviderFile(fileIDs[i], "xmltv", "name"))
       }
 
     }
@@ -1946,7 +1946,7 @@ class XMLTVFile {
 
 function getValueFromProviderFile(file: string, fileType, key) {
 
-  if (file == "xTeVe Dummy") {
+  if (file == "xTeVe Dummy" || file == "xTeVe NVR") {
     return file
   }
 
@@ -2017,12 +2017,12 @@ function checkXmltvChannel(epgMapId: string, newXmlTvId: string, xmlTvFile: stri
   channelActiveCb.checked = channelActive;
   channelActiveCb.className = 'changed';
 
-  if (xmlTvFile != 'xTeVe Dummy' && channelActive == true) {
+  if (xmlTvFile != 'xTeVe Dummy' && xmlTvFile != 'xTeVe NVR' && channelActive == true) {
     changeChannelLogo(epgMapId);
     return;
   }
 
-  if (xmlTvFile == 'xTeVe Dummy') {
+  if (xmlTvFile == 'xTeVe Dummy' || xmlTvFile == 'xTeVe NVR') {
     (document.getElementById('update-icon') as HTMLInputElement).checked = false;
     (document.getElementById('update-icon') as HTMLInputElement).className = 'changed';
   }
@@ -2043,7 +2043,7 @@ function changeChannelLogo(epgMapId: string) {
 
   let logo: string;
 
-  if (updateLogo == true && xmlTvFile != 'xTeVe Dummy') {
+  if (updateLogo == true && xmlTvFile != 'xTeVe Dummy' && xmlTvFile != 'xTeVe NVR') {
 
     if (SERVER['xepg']['xmltvMap'][xmlTvFile].hasOwnProperty(newXmlTvId)) {
       logo = SERVER['xepg']['xmltvMap'][xmlTvFile][newXmlTvId]['icon'];
@@ -2339,7 +2339,7 @@ function donePopupData(dataType: string, idsStr: string) {
           break
 
         case "x-xmltv-file":
-          if (value != "xTeVe Dummy" && value != "-") {
+          if (value != "xTeVe Dummy" && value != "xTeVe NVR" && value != "-") {
             value = getValueFromProviderFile(value, "xmltv", "name")
           }
 
