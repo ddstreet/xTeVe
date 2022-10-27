@@ -960,13 +960,9 @@ func createDummyProgram(xepgChannel XEPGChannelStruct) (dummyXMLTV XMLTV) {
 func createNVRProgram(xepgChannel XEPGChannelStruct) (nvrXMLTV XMLTV) {
 
 	var imgc = Data.Cache.Images
-	var currentTime = time.Now()
-	var dateArray = strings.Fields(currentTime.String())
-	var offset = " " + dateArray[2]
-	var currentDay = currentTime.Format("20060102")
-	var startTime, _ = time.Parse("20060102150405", currentDay+"000000")
+	var now = time.Now()
 
-	showInfo("Create NVR Guide:" + "Time offset" + offset + " - " + xepgChannel.XName)
+	showInfo("Create NVR Guide:" + "Timezone offset" + now.Format("-0700") + " - " + xepgChannel.XName)
 
 	var dl = strings.Split(xepgChannel.XMapping, "_")
 	nvrLength, err := strconv.Atoi(dl[0])
@@ -975,48 +971,57 @@ func createNVRProgram(xepgChannel XEPGChannelStruct) (nvrXMLTV XMLTV) {
 		return
 	}
 
-	for d := 0; d < 4; d++ {
+	var start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	var end = time.Date(start.Year(), start.Month(), start.Day() + 4, 0, 0, 0, 0, start.Location())
 
-		var epgStartTime = startTime.Add(time.Hour * time.Duration(d*24))
+	var epgStartTime = start
+	var day = epgStartTime.Day()
+	var episode = 0
 
-		for t,e := nvrLength,1; t <= 1440; t,e = t + nvrLength,e + 1 {
+	for epgStartTime.Before(end) {
 
-			var s, _ = strconv.Atoi(epgStartTime.Format("20060102"))
-
-			var epgStopTime = epgStartTime.Add(time.Minute * time.Duration(nvrLength))
-
-			var epg Program
-			poster := Poster{}
-
-			epg.Channel = xepgChannel.XMapping
-			epg.Start = epgStartTime.Format("20060102150405") + offset
-			epg.Stop = epgStopTime.Format("20060102150405") + offset
-			epg.Title = append(epg.Title, &Title{Value: xepgChannel.XName, Lang: "en"})
-
-			if nvrLength == 1440 {
-				epg.SubTitle = append(epg.SubTitle, &SubTitle{Value: "24h", Lang: "en"})
-				epg.Desc = append(epg.Desc, &Desc{Value: epgStartTime.Format("2006-01-02"), Lang: "en"})
-			} else {
-				epg.SubTitle = append(epg.SubTitle, &SubTitle{Value: epgStartTime.Format("15:04") + " - " + epgStopTime.Format("15:04"), Lang: "en"})
-				epg.Desc = append(epg.Desc, &Desc{Value: epgStartTime.Format("2006-01-02 15:04") + " - " + epgStopTime.Format("15:04"), Lang: "en"})
-			}
-
-			if Settings.XepgReplaceMissingImages {
-				poster.Src = imgc.Image.GetURL(xepgChannel.TvgLogo)
-				epg.Poster = append(epg.Poster, poster)
-			}
-
-			epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: fmt.Sprintf("S%dE%d", s, e), System: "SxxExx"})
-			epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: fmt.Sprintf("%d.%d.", s - 1, e - 1), System: "xmltv_ns"})
-			epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: epgStartTime.Format("2006-01-02 15:04"), System: "onscreen"})
-			epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: epgStartTime.Format("2006-01-02 15:04:05"), System: "original-air-date"})
-
-			epg.New = &New{Value: ""}
-
-			nvrXMLTV.Program = append(nvrXMLTV.Program, &epg)
-			epgStartTime = epgStopTime
-
+		var season, _ = strconv.Atoi(epgStartTime.Format("20060102"))
+		episode = episode + 1
+		if day != epgStartTime.Day() {
+			day = epgStartTime.Day()
+			episode = 1
 		}
+
+		var epgStopTime = epgStartTime.Add(time.Minute * time.Duration(nvrLength))
+
+		var epg Program
+		poster := Poster{}
+
+		epg.Channel = xepgChannel.XMapping
+		epg.Start = epgStartTime.Format("20060102150405 -0700")
+		epg.Stop = epgStopTime.Format("20060102150405 -0700")
+		epg.Title = append(epg.Title, &Title{Value: xepgChannel.XName, Lang: "en"})
+		epg.SubTitle = append(epg.SubTitle, &SubTitle{Value: epgStartTime.Format("15:04 MST"), Lang: "en"})
+
+		var startTimeFormat = epgStartTime.Format("2006-01-02 15:04")
+		if epgStartTime.Format("-0700") != epgStopTime.Format("-0700") {
+			startTimeFormat = epgStartTime.Format("2006-01-02 15:04 MST")
+		}
+		var stopTimeFormat = epgStopTime.Format("15:04 MST")
+		if epgStartTime.Day() != epgStopTime.Day() {
+			stopTimeFormat = epgStopTime.Format("2006-01-02 15:04 MST")
+		}
+		epg.Desc = append(epg.Desc, &Desc{Value: startTimeFormat + " - " + stopTimeFormat, Lang: "en"})
+
+		if Settings.XepgReplaceMissingImages {
+			poster.Src = imgc.Image.GetURL(xepgChannel.TvgLogo)
+			epg.Poster = append(epg.Poster, poster)
+		}
+
+		epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: fmt.Sprintf("S%dE%d", season, episode), System: "SxxExx"})
+		epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: fmt.Sprintf("%d.%d.", season - 1, episode - 1), System: "xmltv_ns"})
+		epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: epgStartTime.Format("2006-01-02 15:04 MST"), System: "onscreen"})
+		epg.EpisodeNum = append(epg.EpisodeNum, &EpisodeNum{Value: epgStartTime.Format("2006-01-02 15:04:05 -0700"), System: "original-air-date"})
+
+		epg.New = &New{Value: ""}
+
+		nvrXMLTV.Program = append(nvrXMLTV.Program, &epg)
+		epgStartTime = epgStopTime
 
 	}
 
